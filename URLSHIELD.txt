@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+
+import argparse
+import ipaddress
+import json
+from urllib.parse import urlparse
+
+
+SHORTENERS = {
+    "bit.ly",
+    "tinyurl.com",
+    "t.co",
+    "goo.gl",
+    "is.gd",
+    "ow.ly",
+}
+
+
+def analyze(url):
+    findings = []
+
+    if len(url) > 2048:
+        findings.append("URL demasiado larga")
+
+    if any(ord(char) < 32 for char in url):
+        findings.append("Caracteres de control")
+
+    parsed = urlparse(url)
+
+    if parsed.scheme not in ("http", "https"):
+        findings.append("Esquema no HTTP/HTTPS")
+
+    if parsed.username or parsed.password:
+        findings.append("Credenciales incrustadas")
+
+    if "@" in url:
+        findings.append("Símbolo @ detectado")
+
+    hostname = parsed.hostname or ""
+
+    if hostname.lower() in SHORTENERS:
+        findings.append("Servicio de URL corta")
+
+    try:
+        ipaddress.ip_address(hostname)
+        findings.append("Host basado en dirección IP")
+    except ValueError:
+        pass
+
+    return {
+        "tool": "URLShield",
+        "url": url,
+        "findings": findings,
+        "suspicious": bool(findings),
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="URLShield - análisis local de URLs"
+    )
+
+    parser.add_argument("url")
+    parser.add_argument(
+        "-o",
+        "--output",
+        default="urlshield_report.json"
+    )
+
+    args = parser.parse_args()
+
+    report = analyze(args.url)
+
+    with open(
+        args.output,
+        "w",
+        encoding="utf-8"
+    ) as f:
+        json.dump(
+            report,
+            f,
+            indent=2,
+            ensure_ascii=False
+        )
+
+    print(json.dumps(
+        report,
+        indent=2,
+        ensure_ascii=False
+    ))
+
+    print(f"[+] Reporte: {args.output}")
+
+
+if name == "main":
+    main()
