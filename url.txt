@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+
+import argparse
+import ipaddress
+import json
+from urllib.parse import urlparse
+
+
+SHORTENERS = {
+    "bit.ly",
+    "tinyurl.com",
+    "t.co",
+    "goo.gl",
+    "is.gd",
+    "ow.ly",
+}
+
+
+def analyze(url):
+    findings = []
+
+    parsed = urlparse(url)
+
+    if len(url) > 2048:
+        findings.append("URL demasiado larga")
+
+    if any(ord(char) < 32 for char in url):
+        findings.append("Caracteres de control")
+
+    if parsed.scheme.lower() not in ("http", "https"):
+        findings.append("Esquema no HTTP/HTTPS")
+
+    if not parsed.netloc:
+        findings.append("URL sin host válido")
+
+    if parsed.username or parsed.password:
+        findings.append("Credenciales incrustadas")
+
+    hostname = parsed.hostname or ""
+    hostname = hostname.lower().rstrip(".")
+
+    if "@" in parsed.netloc:
+        findings.append("Símbolo @ detectado")
+
+    if hostname in SHORTENERS:
+        findings.append("Servicio de URL corta")
+
+    try:
+        ipaddress.ip_address(hostname)
+        findings.append("Host basado en dirección IP")
+    except ValueError:
+        pass
+
+    return {
+        "tool": "URLShield",
+        "url": url,
+        "hostname": hostname,
+        "findings": findings,
+        "suspicious": bool(findings),
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="URLShield - análisis local de URLs"
+    )
+
+    parser.add_argument("url")
+    parser.add_argument(
+        "-o",
+        "--output",
+        default="urlshield_report.json"
+    )
+
+    args = parser.parse_args()
+
+    report = analyze(args.url)
+
+    try:
+        with open(args.output, "w", encoding="utf-8") as f:
+            json.dump(
+                report,
+                f,
+                indent=2,
+                ensure_ascii=False
+            )
+    except OSError as error:
+        raise SystemExit(
+            f"[!] No se pudo escribir el reporte: {error}"
+        )
+
+    print(json.dumps(
+        report,
+        indent=2,
+        ensure_ascii=False
+    ))
+
+    print(f"[+] Reporte: {args.output}")
+
+
+if name == "main":
+    main()
